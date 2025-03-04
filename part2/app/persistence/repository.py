@@ -1,4 +1,7 @@
+#!/usr/bin/env python3
+
 from abc import ABC, abstractmethod
+
 
 class Repository(ABC):
     @abstractmethod
@@ -49,4 +52,5 @@ class InMemoryRepository(Repository):
             del self._storage[obj_id]
 
     def get_by_attribute(self, attr_name, attr_value):
-        return next((obj for obj in self._storage.values() if getattr(obj, attr_name) == attr_value), None)
+        return next((obj for obj in self._storage.values()
+                    if getattr(obj, attr_name) == attr_value), None)
