@@ -1,5 +1,3 @@
-#! /usr/bin/env python3
-
 """
 This module defines the User class for managing users in an application.
 
@@ -12,11 +10,12 @@ The User class includes functionalities to:
 
 import re
 import bcrypt
-import uuid
 from datetime import datetime
+from app.models.base_model import BaseModel
+from app.services import facade
 
 
-class User:
+class User(BaseModel):
     """
     Class to represent a user.
 
@@ -24,11 +23,13 @@ class User:
     ----------
     id : str
         Unique identifier for the user.
+    username : str
+        User's username.
     first_name : str
         User's first name.
     last_name : str
         User's last name.
-    email : str
+    email : st
         User's email address.
     __password : bytes
         Hash of the user's password.
@@ -38,15 +39,18 @@ class User:
         User's creation date.
     updated_at : datetime
         Date of the last update to the user.
+    places : list
+        List of places owned by the user.
+    facade : HBnBFacade
+        Instance of the HBnBFacade for interacting with repositories.
     """
 
     def __init__(self,
                  first_name: str,
                  last_name: str,
                  email: str,
-                 password: str,
-                 is_admin: bool =
-                 False):
+                 # password: str = None,
+                 is_admin: bool = False):
         """
         Initializes a new user with the provided details.
 
@@ -63,16 +67,17 @@ class User:
         is_admin : bool, optional
             Indicates if the user is an admin (default is False).
         """
-        self.id = str(uuid.uuid4())
-        self.first_name = self.validate_name(first_name, "First name")
-        self.last_name = self.validate_name(last_name, "Last name")
+        super().__init__()
+        self.first_name = self.validate_name(first_name)
+        self.last_name = self.validate_name(last_name)
         self.email = self.validate_email(email)
-        self.__password = self.hash_password(password)
+        # self.validate_password(password)
+        # self.__password = self.hash_password(password)
+        # hash
         self.is_admin = is_admin
-        self.created_at = datetime.now()
-        self.updated_at = datetime.now()
+        self.places = []
 
-    def validate_name(self, name: str, field_name: str) -> str:
+    def validate_name(self, name: str) -> str:
         """
         Validates that the name does not exceed 50 characters.
 
@@ -93,13 +98,16 @@ class User:
         ValueError
             If the name exceeds 50 characters.
         """
-        if len(name) > 50:
-            raise ValueError(f"{field_name} must be 50 characters or less")
+        if not name:
+            raise ValueError("Name cannot be empty")
+        elif len(name) < 3 or len(name) > 50:
+            raise ValueError(
+                f"{len(name)} must be 3 char min or 50 char or less")
         return name
 
     def validate_email(self, email: str) -> str:
         """
-        Validates the email format.
+        Validates the email format and uniqueness.
 
         Parameters:
         -----------
@@ -114,12 +122,22 @@ class User:
         Raises:
         ------
         ValueError
-            If the email format is invalid.
+            If the email format is invalid or if the email already exists.
         """
-        if re.match(r"[^@]+@[^@]+\.[^@]+", email):
-            return email
-        else:
+        if not email:
+            raise ValueError("Email cannot be empty")
+        elif not re.match(r"[^@]+@[^@]+\.[^@]+", email):
             raise ValueError("Invalid email format")
+        return email
+
+    def validate_password(self, password: str) -> str:
+        """Validar complejidad de contraseña"""
+        if len(password) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        if not re.match(r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$", password):
+            raise ValueError(
+                "Password must contain at least one letter and one number")
+        return password
 
     def hash_password(self, password: str) -> bytes:
         """
@@ -153,28 +171,28 @@ class User:
         """
         return bcrypt.checkpw(password.encode('utf-8'), self.__password)
 
-    def update(self, first_name: str = None, last_name: str = None,
-               email: str = None, is_admin: bool = None):
+    def is_administrator(self) -> bool:
         """
-        Updates the user's details.
+        Check if the user has administrator privileges.
 
-        Parameters:
-        -----------
-        first_name : str, optional
-            New first name for the user.
-        last_name : str, optional
-            New last name for the user.
-        email : str, optional
-            New email address for the user.
-        is_admin : bool, optional
-            New admin status for the user.
+        Returns:
+        --------
+        bool
+            True if the user is an administrator, False otherwise.
         """
-        if first_name:
-            self.first_name = self.validate_name(first_name, "First name")
-        if last_name:
-            self.last_name = self.validate_name(last_name, "Last name")
-        if email:
-            self.email = self.validate_email(email)
-        if is_admin is not None:
-            self.is_admin = is_admin
-        self.updated_at = datetime.now()
+        return self.is_admin
+
+    def add_place(self, place):
+        """Adds a place to the user's list of owned places."""
+        from app.models.place import Place
+        if not isinstance(place, Place):
+            raise ValueError("Only Place instances can be added.")
+
+        # Verificar que el lugar no tenga ya un propietario
+        if place in self.places:
+            raise ValueError("Place already added to this user")
+
+        self.places.append(place)
+        # Aseguramos la relación bidireccional
+        if place.owner != self:
+            place.owner = self
