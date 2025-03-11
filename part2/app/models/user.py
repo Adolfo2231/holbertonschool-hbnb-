@@ -49,7 +49,7 @@ class User(BaseModel):
                  first_name: str,
                  last_name: str,
                  email: str,
-                 # password: str = None,
+                 password: str = True,
                  is_admin: bool = False):
         """
         Initializes a new user with the provided details.
@@ -71,8 +71,8 @@ class User(BaseModel):
         self.first_name = self.validate_name(first_name)
         self.last_name = self.validate_name(last_name)
         self.email = self.validate_email(email)
-        # self.validate_password(password)
-        # self.__password = self.hash_password(password)
+        self.validate_password(password)
+        self.__password = self.hash_password(password)
         # hash
         self.is_admin = is_admin
         self.places = []
@@ -139,37 +139,14 @@ class User(BaseModel):
                 "Password must contain at least one letter and one number")
         return password
 
-    def hash_password(self, password: str) -> bytes:
-        """
-        Generates a secure hash for the password.
 
-        Parameters:
-        -----------
-        password : str
-            Password to hash.
+    def hash_password(self, password):
+        """Hashes the password before storing it."""
+        self.password = bcrypt.generate_password_hash(password).decode('utf-8')
 
-        Returns:
-        --------
-        bytes
-            Hash of the password.
-        """
-        return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-
-    def check_password(self, password: str) -> bool:
-        """
-        Checks if the provided password matches the stored hash.
-
-        Parameters:
-        -----------
-        password : str
-            Password to verify.
-
-        Returns:
-        --------
-        bool
-            True if the password matches, False otherwise.
-        """
-        return bcrypt.checkpw(password.encode('utf-8'), self.__password)
+    def verify_password(self, password):
+        """Verifies if the provided password matches the hashed password."""
+        return bcrypt.check_password_hash(self.password, password)
 
     def is_administrator(self) -> bool:
         """
