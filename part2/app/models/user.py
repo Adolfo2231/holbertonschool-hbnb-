@@ -9,10 +9,12 @@ The User class includes functionalities to:
 """
 
 import re
-import bcrypt
 from datetime import datetime
 from app.models.base_model import BaseModel
 from app.services import facade
+from flask_bcrypt import Bcrypt
+
+bcrypt = Bcrypt()  # Initialize Bcrypt
 
 
 class User(BaseModel):
@@ -49,7 +51,7 @@ class User(BaseModel):
                  first_name: str,
                  last_name: str,
                  email: str,
-                 password: str = True,
+                 password: str,
                  is_admin: bool = False):
         """
         Initializes a new user with the provided details.
@@ -132,11 +134,17 @@ class User(BaseModel):
 
     def validate_password(self, password: str) -> str:
         """Validar complejidad de contraseña"""
+        
+        # Ensure password is a string, not bytes
+        if isinstance(password, bytes):
+            password = password.decode('utf-8')
+        
         if len(password) < 8:
             raise ValueError("Password must be at least 8 characters long")
-        if not re.match(r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$", password):
+        elif not re.match(r"^(?=.*[a-zA-Z])(?=.*\d).{8,}$", password):
             raise ValueError(
                 "Password must contain at least one letter and one number")
+            
         return password
 
 
