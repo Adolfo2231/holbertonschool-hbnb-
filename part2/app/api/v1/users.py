@@ -28,10 +28,11 @@ user_model = api.model('User', {
     'is_admin': fields.Boolean(default=False, description='Admin status')
 })
 
+
 @api.route('/')
 class UserList(Resource):
     """Resource for creating users."""
-    
+
     @api.expect(user_model, validate=True)
     @api.response(201, 'User successfully created')
     @api.response(400, 'Invalid input data')
@@ -41,9 +42,9 @@ class UserList(Resource):
         """Register a new user."""
         try:
             data = api.payload
-            result = facade.create_user(data)  
+            result = facade.create_user(data)
             return {"status": "success", "data": result}, 201
-        
+
         except ValueError as e:
             raise BadRequest({
                 "message": {
@@ -77,6 +78,7 @@ class UserList(Resource):
                 }
             })
 
+
 @api.route('/<string:user_id>')
 class UserResource(Resource):
     """Resource for retrieving and managing user details."""
@@ -96,7 +98,7 @@ class UserResource(Resource):
             raise NotFound("User not found")
         except Exception as e:
             raise InternalServerError(str(e))
-    
+
     @api.expect(user_model, validate=True)
     @api.response(200, "User successfully updated")
     @api.response(400, "Invalid input data")
@@ -125,9 +127,8 @@ class UserResource(Resource):
     def delete(self, user_id: str) -> dict:
         """Delete user account (Users can delete only their own accounts)."""
         try:
-            if user_id != get_jwt_identity():
-                raise Forbidden("Users can only delete their own accounts")
-            facade.delete_user(user_id)
+            current_user_id = get_jwt_identity()
+            facade.delete_user(user_id, current_user_id)
             return {"status": "success", "message": "User deleted"}, 200
         except NotFound:
             raise NotFound("User not found")
