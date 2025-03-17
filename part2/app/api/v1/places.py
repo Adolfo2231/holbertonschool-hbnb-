@@ -37,7 +37,7 @@ place_model = api.model('Place', {
     'longitude': fields.Float(required=True, description='Longitude of the place'),
     'owner_id': fields.String(required=True, description='ID of the owner'),
     'amenities': fields.List(fields.String, required=True,
-                           description="List of amenities ID's")
+                             description="List of amenities ID's")
 })
 
 
@@ -52,8 +52,25 @@ class PlaceList(Resource):
     def post(self):
         try:
             data = api.payload
+
+            # Validación básica de campos requeridos
+            required_fields = [
+                'title',
+                'price',
+                'latitude',
+                'longitude',
+                'owner_id',
+                'amenities']
+            missing_fields = [
+                field for field in required_fields if field not in data]
+
+            if missing_fields:
+                return {
+                    "status": "error", "message": f"Missing required fields: {
+                        ', '.join(missing_fields)}"}, 400
+
             result = facade.create_place(data)
-            
+
             if isinstance(result, dict) and "error" in result:
                 return result, 400
 
@@ -63,6 +80,11 @@ class PlaceList(Resource):
                 "data": result
             }, 201
 
+        except ValueError as ve:
+            return {
+                "status": "error",
+                "message": str(ve)
+            }, 400
         except Exception as e:
             return {
                 "status": "error",
@@ -74,14 +96,14 @@ class PlaceList(Resource):
         """Retrieve a list of all places (Public access)."""
         min_price = request.args.get('min_price', type=float)
         max_price = request.args.get('max_price', type=float)
-        
+
         if min_price and max_price:
             places = facade.get_places_by_price_range(min_price, max_price)
         else:
             places = facade.get_all_places()
-            
-        return {"status": "success", "data": [place.to_dict() for place in places]}, 200
 
+        return {"status": "success", "data": [
+            place.to_dict() for place in places]}, 200
 
 
 @api.route('/<place_id>')
@@ -102,43 +124,44 @@ class PlaceResource(Resource):
     @api.response(403, "Permission denied")
     @api.response(404, "Place not found")
     def put(self, place_id: str) -> dict:
-        """Update place details (Only owners can modify their places)."""
+        """Update place details (Owners and admins can modify places)."""
         try:
-            current_user_id = get_jwt_identity()
+            current_user = facade.get_user(get_jwt_identity())
+            if not current_user:
+                return {"error": "User not found"}, 404
+
             place = facade.get_place(place_id)
-            
             if not place:
-                raise NotFound("Place not found")
-                
-            if place.owner_id != current_user_id:
-                raise Forbidden("Users can only modify their own places")
-                
+                return {"error": "Place not found"}, 404
+
+            # Permitir modificación si es admin o dueño del lugar
+            if not current_user.is_admin and place.owner_id != current_user.id:
+                return {"error": "Unauthorized action"}, 403
+
             update_data = request.get_json()
             result = facade.update_place(place_id, update_data)
             return {"status": "success", "data": result}, 200
         except Exception as e:
-            raise InternalServerError(str(e))
+            return {"error": str(e)}, 500
 
-@api.route('/<place_id>')
-class AdminPlaceModify(Resource):
-    @jwt_required()
-    def put(self, place_id):
-        """Modify a place (Admins can modify any place)."""
-        current_user = facade.get_user(get_jwt_identity())
 
-        if not current_user:
-            return {"error": "User not found"}, 404  # 🔥 Seguridad: Si el usuario no existe
+@api.route('/<place_id>/reviews')
+class PlaceReviews(Resource):
+    def get(self, place_id):
+        """Get all reviews for a specific place"""
+        try:
+            # Verificar que el lugar existe
+            place = facade.get_place(place_id)
+            if not place:
+                return {'error': 'Place not found'}, 404
 
-        place = facade.get_place(place_id)
-        if not place:
-            return {"error": "Place not found"}, 404
-
-        # 🔥 Si NO es admin y NO es el dueño, rechazar la acción
-        if not getattr(current_user, "is_admin", False) and place.owner_id != getattr(current_user, "id", None):
-            return {"error": "Unauthorized action"}, 403
-
-        update_data = request.get_json()
-        result = facade.update_place(place_id, update_data)
-
-        return result, 200  # ✅ Devuelve la actualización exitosa
-    
+            # Obtener las reviews
+            reviews = facade.get_reviews_by_place(place_id)
+            return {
+                "status": "success",
+                "data": {
+                    "reviews": [review.to_dict() for review in reviews]
+                }
+            }, 200
+        except Exception as e:
+            return {"error": str(e)}, 500
