@@ -54,6 +54,7 @@ class AmenityList(Resource):
         except Exception as e:
             raise InternalServerError(str(e))
 
+
 class AdminAmenityCreate(Resource):
     @jwt_required()
     def post(self):
@@ -66,8 +67,9 @@ class AdminAmenityCreate(Resource):
 
         if isinstance(result, tuple):
             return result
-        
+
         return result, 201
+
 
 @api.route('/<amenity_id>')
 class AmenityResource(Resource):
@@ -91,6 +93,7 @@ class AmenityResource(Resource):
             return {'error': 'Amenity not found'}, 404
         return amenity.to_dict(), 200
 
+
 class AdminAmenityModify(Resource):
     @jwt_required()
     def put(self, amenity_id):
@@ -102,6 +105,7 @@ class AdminAmenityModify(Resource):
         result = facade.update_amenity(amenity_id, update_data)
 
         return result, 200
+
 
 @api.route('/place/<place_id>/amenities')
 class PlaceAmenities(Resource):
