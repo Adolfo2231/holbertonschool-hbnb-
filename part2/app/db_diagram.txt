@@ -1,0 +1,52 @@
+dbDiagram
+    Users {
+        string id PK
+        string first_name
+        string last_name
+        string email
+        string password_hash
+        boolean is_admin
+        datetime created_at
+        datetime updated_at
+    }
+
+    Places {
+        string id PK
+        string title
+        string description
+        float price
+        float latitude
+        float longitude
+        string owner_id FK
+        datetime created_at
+        datetime updated_at
+    }
+
+    Reviews {
+        string id PK
+        string text
+        integer rating
+        string user_id FK
+        string place_id FK
+        datetime created_at
+        datetime updated_at
+    }
+
+    Amenities {
+        string id PK
+        string name
+        datetime created_at
+        datetime updated_at
+    }
+
+    PlaceAmenities {
+        string place_id FK
+        string amenity_id FK
+    }
+
+    Users ||--o{ Places : owns
+    Users ||--o{ Reviews : writes
+    Places ||--o{ Reviews : has
+    Places }|--|| Users : owned_by
+    Places }|--|{ Amenities : has
+    Amenities }|--|{ Places : belongs_to
