@@ -1,34 +1,61 @@
 """
 BaseModel module for the HBnB application.
 
-This module defines the BaseModel class, which provides common attributes
-and methods for other models in the application. It includes functionality
-for generating unique IDs and timestamps for creation and updates.
+This module defines the BaseModel class as a SQLAlchemy model.
 """
 
+from app.extensions import db  # Importar la instancia de SQLAlchemy
 import uuid
 from datetime import datetime
 
 
-class BaseModel:
+class BaseModel(db.Model):
     """Base class for all models in the HBnB application."""
 
-    def __init__(self):
-        """Initialize a new BaseModel instance."""
-        self.id = str(uuid.uuid4())
-        self.created_at = datetime.now()
-        self.updated_at = datetime.now()
+    __abstract__ = True  # Evita que SQLAlchemy cree una tabla para BaseModel
+
+    # Definición de columnas comunes para todos los modelos
+    id = db.Column(
+        db.String(36), 
+        primary_key=True, 
+        default=lambda: str(uuid.uuid4())
+    )
+    created_at = db.Column(
+        db.DateTime, 
+        nullable=False,
+        default=datetime.utcnow
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
 
     def save(self):
-        """Update the updated_at timestamp."""
-        self.updated_at = datetime.now()
+        """Save the instance to the database."""
+        try:
+            db.session.add(self)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise e
 
     def update(self, data):
         """Update object attributes from a dictionary."""
         for key, value in data.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-        self.save()  # Refresh updated_at timestamp
+        self.save()
+
+    def delete(self):
+        """Delete the instance from the database."""
+        try:
+            db.session.delete(self)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise e
 
     def to_dict(self):
         """Convert instance attributes to

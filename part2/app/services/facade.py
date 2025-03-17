@@ -4,50 +4,40 @@ from app.models.user import User
 from app.models.place import Place
 from app.models.review import Review
 from app.models.amenity import Amenity
-from app.persistence.repository import SQLAlchemyRepository
+from app.persistence.user_repository import UserRepository
+from app.persistence.place_repository import PlaceRepository
+from app.persistence.amenity_repository import AmenityRepository
+from app.persistence.review_repository import ReviewRepository
+from flask_sqlalchemy import SQLAlchemy
+from app.extensions import db
 
 # --------------------------------------------
 # HBnBFacade Class - Business Logic Layer
 # --------------------------------------------
+
 
 class HBnBFacade:
     """Facade that provides a unified interface to interact with the application repositories."""
 
     def __init__(self):
         """Initialize repositories for each model."""
-        self.user_repo = SQLAlchemyRepository(User)
-        self.place_repo = SQLAlchemyRepository(Place)
-        self.review_repo = SQLAlchemyRepository(Review)
-        self.amenity_repo = SQLAlchemyRepository(Amenity)
+        self.user_repo = UserRepository()
+        self.place_repo = PlaceRepository()
+        self.amenity_repo = AmenityRepository()
+        self.review_repo = ReviewRepository()
 
     # --------------------------------------------
     # USER MANAGEMENT
     # --------------------------------------------
 
-    def create_user(self, data, admin_override=False):
-        """Creates a new user. Only admins can create users with is_admin=True."""
-        if not admin_override and data.get("is_admin", False):
-            raise PermissionError("Only admins can create admin users.")
-
-        if self.get_user_by_email(data["email"]):
+    def create_user(self, data):
+        """Creates a new user ensuring all constraints are met."""
+        if self.user_repo.is_email_registered(data["email"]):
             raise ValueError("Email already registered.")
 
         user = User(**data)
-        self.user_repo.add(user)
-        return user.to_dict()
-
-    def update_user(self, user_id, update_data, admin_override=False):
-        """Updates a user's details. Admins can update any user, including email/password."""
-        user = self.get_user(user_id)
-        if not user:
-            raise ValueError("User not found.")
-
-        if not admin_override and ("email" in update_data or "password" in update_data):
-            raise PermissionError("Only admins can modify email or password.")
-
-        for key, value in update_data.items():
-            setattr(user, key, value)
-        
+        db.session.add(user)
+        db.session.commit()
         return user.to_dict()
 
     def get_user(self, user_id):
@@ -56,6 +46,18 @@ class HBnBFacade:
         if not user:
             raise ValueError("User not found.")
         return user
+
+    def update_user(self, user_id, update_data, admin_override=False):
+        """Update user details."""
+        user = self.get_user(user_id)
+        if not admin_override and (
+                "email" in update_data or "password" in update_data):
+            raise PermissionError("Only admins can modify email or password.")
+
+        for key, value in update_data.items():
+            setattr(user, key, value)
+
+        return user.to_dict()
 
     def get_user_by_email(self, email):
         """Retrieve a user by email."""
@@ -67,6 +69,23 @@ class HBnBFacade:
     def get_all_users(self):
         """Retrieve all users."""
         return self.user_repo.get_all()
+    
+    def delete_user(self, user_id, current_user_id):
+        """Delete a user by ID."""
+        # Toda la lógica de validación aquí
+        current_user = self.get_user(current_user_id)
+        if not current_user or not current_user.is_admin:
+            raise PermissionError("Admin access required")
+
+        user = self.get_user(user_id)
+        if not user:
+            raise ValueError("User not found")
+            
+        if user.is_admin and self.count_admins() <= 1:
+            raise ValueError("Cannot delete the last admin user")
+
+        self.user_repo.delete(user)
+        return True
 
     # --------------------------------------------
     # AMENITY MANAGEMENT
@@ -102,13 +121,20 @@ class HBnBFacade:
 
     def create_place(self, data):
         """Create a new place, ensuring required fields and valid owner/amenities."""
-        required_fields = ['title', 'price', 'latitude', 'longitude', 'owner_id', 'amenities']
+        required_fields = [
+            'title',
+            'price',
+            'latitude',
+            'longitude',
+            'owner_id',
+            'amenities']
         if not all(field in data for field in required_fields):
             raise ValueError("Missing required fields.")
 
         owner = self.get_user(data['owner_id'])
         for amenity_id in data['amenities']:
-            self.get_amenity(amenity_id)  # This raises an error if the amenity is missing
+            # This raises an error if the amenity is missing
+            self.get_amenity(amenity_id)
 
         place = Place(**data)
         self.place_repo.add(place)
@@ -173,5 +199,5 @@ class HBnBFacade:
     def delete_review(self, review_id):
         """Delete an existing review."""
         review = self.get_review(review_id)  # Now raises error if not found
-        self.review_repo.delete(review_id)
+        self.review_repo.delete(review)
         return True

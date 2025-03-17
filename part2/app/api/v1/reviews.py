@@ -10,6 +10,9 @@ interface for review management.
 from flask_restx import Namespace, Resource, fields
 from app.services import facade
 import uuid
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from app.models.review import Review
+from werkzeug.exceptions import BadRequest, NotFound, Forbidden, InternalServerError
 
 api = Namespace('reviews', description='Review operations')
 
@@ -60,15 +63,31 @@ class ReviewList(Resource):
     @api.response(201, 'Review successfully created')
     @api.response(400, 'Invalid input data')
     def post(self):
-        """Register a new review."""
-        review = facade.create_review(api.payload)
-        if isinstance(review, dict) and "error" in review:
-            return review, 400
+        """Create a new review."""
+        data = request.get_json()
+        current_user_id = get_jwt_identity()
 
-        if not review:
-            return {'error': 'Invalid input data'}, 400
+        place = facade.get_place(data["place_id"])
+        if not place:
+            return {"error": "Place not found"}, 404
 
-        return review.to_dict(), 201
+        # Prevent users from reviewing their own place
+        if place.owner_id == current_user_id:
+            return {"error": "You cannot review your own place"}, 400
+
+        # Check for duplicate reviews
+        existing_review = facade.get_review_by_user_and_place(current_user_id, place.id)
+        if existing_review:
+            return {"error": "You have already reviewed this place"}, 400
+
+        new_review = Review(
+            user_id=current_user_id,
+            place_id=place.id,
+            text=data["text"]
+        )
+
+        saved_review = facade.create_review(new_review)
+        return saved_review.to_dict(), 201
 
 
 @api.route('/<review_id>')
@@ -91,16 +110,28 @@ class ReviewResource(Resource):
             return {'error': 'Review not found'}, 404
         return review.to_dict(), 200
 
+    @jwt_required()
     @api.expect(review_model, validate=True)
-    @api.response(200, 'Review updated successfully')
-    @api.response(404, 'Review not found')
-    @api.response(400, 'Invalid input data')
-    def put(self, review_id):
-        """Update a review's information."""
-        review = facade.update_review(review_id, api.payload)
-        if not review:
-            return {'error': 'Review not found'}, 404
-        return review.to_dict(), 200
+    @api.response(200, "Review updated successfully")
+    @api.response(403, "Permission denied")
+    @api.response(404, "Review not found")
+    def put(self, review_id: str) -> dict:
+        """Update review (Only authors can modify their reviews)."""
+        try:
+            current_user_id = get_jwt_identity()
+            review = facade.get_review(review_id)
+            
+            if not review:
+                raise NotFound("Review not found")
+                
+            if review.user_id != current_user_id:
+                raise Forbidden("Users can only modify their own reviews")
+                
+            update_data = request.get_json()
+            result = facade.update_review(review_id, update_data)
+            return {"status": "success", "data": result}, 200
+        except Exception as e:
+            raise InternalServerError(str(e))
 
     @api.response(200, 'Review deleted successfully')
     @api.response(404, 'Review not found')
@@ -136,3 +167,23 @@ class PlaceReviewList(Resource):
         if not reviews:
             return {'error': 'Place not found'}, 404
         return reviews, 200
+
+
+@api.route('/place/<place_id>/reviews')
+class PlaceReviews(Resource):
+    def get(self, place_id):
+        try:
+            # Usar get_reviews_by_place del repositorio
+            reviews = facade.get_reviews_by_place(place_id)
+            # Usar get_average_rating del repositorio
+            average = facade.get_average_rating(place_id)
+            
+            return {
+                "status": "success",
+                "data": {
+                    "reviews": [review.to_dict() for review in reviews],
+                    "average_rating": average
+                }
+            }, 200
+        except Exception as e:
+            return {"error": str(e)}, 500

@@ -1,132 +1,135 @@
 """
-Users API module for the HBnB application.
+Users API Module
 
-This module defines the API endpoints for user operations, including
-creating, retrieving, updating, and listing users. It uses Flask-RESTx
-to define the routes and handle HTTP requests, providing a RESTful
-interface for user management.
+This module defines API endpoints for user operations, including
+registration, profile management, and account deletion.
+Regular users can only manage their own accounts.
+
+Features:
+- User registration
+- Profile retrieval and updates
+- Account deletion
+- Structured exception handling
 """
 
 from flask_restx import Namespace, Resource, fields
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services import facade
-from werkzeug.security import generate_password_hash
-from flask_bcrypt import Bcrypt
-
-bcrypt = Bcrypt()  # Initialize Bcrypt
+from flask import request
+from werkzeug.exceptions import BadRequest, Forbidden, Conflict, InternalServerError, NotFound
 
 api = Namespace('users', description='User operations')
 
-# Define the user model for input validation and documentation
 user_model = api.model('User', {
-    'first_name': fields.String(required=True,
-                                description='First name of the user'),
-    'last_name': fields.String(required=True,
-                               description='Last name of the user'),
-    'email': fields.String(required=True, description='Email of the user'),
-    'password': fields.String(required=True,
-                              description='Password of the user')
+    'first_name': fields.String(required=True, description='First name'),
+    'last_name': fields.String(required=True, description='Last name'),
+    'email': fields.String(required=True, description='Email address'),
+    'password': fields.String(required=True, description='User password'),
+    'is_admin': fields.Boolean(default=False, description='Admin status')
 })
-
 
 @api.route('/')
 class UserList(Resource):
-    """
-    Resource for creating and listing users.
-
-    Methods:
-        post: Create a new user.
-    """
-
+    """Resource for creating users."""
+    
     @api.expect(user_model, validate=True)
     @api.response(201, 'User successfully created')
-    @api.response(400, 'Email already registered')
     @api.response(400, 'Invalid input data')
+    @api.response(409, 'User already exists')
+    @api.response(403, 'Permission denied')
     def post(self):
         """Register a new user."""
-        user_data = api.payload
-
         try:
-            # Validate required fields
-            if not all([user_data['first_name'],
-                        user_data['last_name'],
-                       user_data['email'],
-                       user_data['password']]):
-                return {"error": "Missing required fields"}, 400
-
-            existing_user = facade.get_user_by_email(user_data['email'])
-            if existing_user:
-                return {'error': 'Email already registered'}, 400
-
-            new_user = facade.create_user(user_data)
-            return {'id': new_user.id,
-                    'first_name': new_user.first_name,
-                    'last_name': new_user.last_name,
-                    'email': new_user.email}, 201
-
+            data = api.payload
+            result = facade.create_user(data)  
+            return {"status": "success", "data": result}, 201
+        
         except ValueError as e:
-            return {"error": str(e)}, 400
+            raise BadRequest({
+                "message": {
+                    "status": "error",
+                    "message": "Invalid input data",
+                    "details": str(e)
+                }
+            })
+        except Conflict as e:
+            raise Conflict({
+                "message": {
+                    "status": "error",
+                    "message": "User already exists",
+                    "details": str(e)
+                }
+            })
+        except PermissionError as e:
+            raise Forbidden({
+                "message": {
+                    "status": "error",
+                    "message": "Permission denied",
+                    "details": str(e)
+                }
+            })
+        except Exception as e:
+            raise InternalServerError({
+                "message": {
+                    "status": "error",
+                    "message": "Unexpected server error",
+                    "details": str(e)
+                }
+            })
 
-
-@api.route('/<user_id>')
+@api.route('/<string:user_id>')
 class UserResource(Resource):
-    """
-    Resource for retrieving and updating a specific user.
+    """Resource for retrieving and managing user details."""
 
-    Methods:
-        get: Retrieve user details by ID.
-    """
+    @jwt_required()
+    @api.response(200, "User details retrieved successfully")
+    @api.response(403, "Permission denied")
+    @api.response(404, "User not found")
+    def get(self, user_id: str) -> dict:
+        """Get user details by ID (Users can only access their own profile)."""
+        try:
+            if user_id != get_jwt_identity():
+                raise Forbidden("Users can only access their own profile")
+            user = facade.get_user(user_id)
+            return {"status": "success", "data": user.to_dict()}, 200
+        except NotFound:
+            raise NotFound("User not found")
+        except Exception as e:
+            raise InternalServerError(str(e))
+    
+    @api.expect(user_model, validate=True)
+    @api.response(200, "User successfully updated")
+    @api.response(400, "Invalid input data")
+    @api.response(403, "Permission denied")
+    @api.response(404, "User not found")
+    @jwt_required()
+    def put(self, user_id: str) -> dict:
+        """Update user details (Users can modify only their own accounts)."""
+        try:
+            if user_id != get_jwt_identity():
+                raise Forbidden("Users can only modify their own accounts")
+            update_data = request.get_json()
+            result = facade.update_user(user_id, update_data)
+            return {"status": "success", "data": result}, 200
+        except NotFound:
+            raise NotFound("User not found")
+        except ValueError as e:
+            raise BadRequest(str(e))
+        except Exception as e:
+            raise InternalServerError(str(e))
 
-    @api.response(200, 'User details retrieved successfully')
-    @api.response(404, 'User not found')
-    def get(self, user_id):
-        """Get user details by ID."""
-        user = facade.get_user(user_id)
-        if not user:
-            return {'error': 'User not found'}, 404
-        print(f"User: {user}")
-        return {'id': user.id, 'first_name': user.first_name,
-                'last_name': user.last_name, 'email': user.email}, 200
-
-
-@api.route('/all')
-class UserListAll(Resource):
-    """
-    Resource for listing all users.
-
-    Methods:
-        get: Retrieve all users.
-    """
-
-    @api.response(200, 'Users retrieved successfully')
-    def get(self):
-        """Get all users."""
-        users = facade.get_all_users()
-        # Now `to_dict()` ensures clean JSON
-        return [user.to_dict() for user in users], 200
-
-
-@api.route('/update/<user_id>')
-class UserResource(Resource):
-    """
-    Resource for updating a specific user.
-
-    Methods:
-        put: Update user details.
-    """
-
-    @api.response(200, 'User updated successfully')
-    @api.response(404, 'User not found')
-    def put(self, user_id):
-        """Update user details."""
-        user_data = api.payload
-        user = facade.update_user(user_id, user_data)
-
-        if not user:
-            return {'error': 'User not found'}, 404
-
-        return {
-            'id': user.id,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-            'email': user.email
-        }, 200
+    @api.response(200, "User successfully deleted")
+    @api.response(403, "Permission denied")
+    @api.response(404, "User not found")
+    @jwt_required()
+    def delete(self, user_id: str) -> dict:
+        """Delete user account (Users can delete only their own accounts)."""
+        try:
+            if user_id != get_jwt_identity():
+                raise Forbidden("Users can only delete their own accounts")
+            facade.delete_user(user_id)
+            return {"status": "success", "message": "User deleted"}, 200
+        except NotFound:
+            raise NotFound("User not found")
+        except Exception as e:
+            raise InternalServerError(str(e))

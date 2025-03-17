@@ -1,15 +1,22 @@
 """
-Amenities API module for the HBnB application.
+Amenities API Module
 
-This module defines the API endpoints for amenity operations, including
-creating, retrieving, updating, and listing amenities. It uses Flask-RESTx
-to define the routes and handle HTTP requests, providing a RESTful
-interface for amenity management.
+This module defines API endpoints for amenity operations.
+Regular users can only view amenities, while creation and management
+is restricted to administrators.
+
+Features:
+- Public amenity viewing
+- Admin-only amenity management
+- Structured exception handling
 """
 
 from flask_restx import Namespace, Resource, fields
 from app.services import facade
 from app.models.amenity import Amenity
+from flask_jwt_extended import jwt_required
+from flask import request
+from werkzeug.exceptions import BadRequest, NotFound, Forbidden, InternalServerError
 
 api = Namespace('amenities', description='Amenity operations')
 
@@ -35,12 +42,32 @@ class AmenityList(Resource):
 
         return amenity.to_dict(), 201
 
-    @api.response(200, 'List of amenities retrieved successfully')
+    @api.response(200, "List of amenities retrieved successfully")
     def get(self):
-        """Retrieve a list of all amenities"""
-        amenities = facade.get_all_amenities()
-        return [amenity.to_dict() for amenity in amenities], 200
+        """Retrieve all amenities (Public access)."""
+        try:
+            amenities = facade.get_all_amenities()
+            return {
+                "status": "success",
+                "data": [amenity.to_dict() for amenity in amenities]
+            }, 200
+        except Exception as e:
+            raise InternalServerError(str(e))
 
+class AdminAmenityCreate(Resource):
+    @jwt_required()
+    def post(self):
+        """Create a new amenity (Admins Only)."""
+        if not is_admin():
+            return {"error": "Admin privileges required"}, 403
+
+        amenity_data = request.get_json()
+        result = facade.create_amenity(amenity_data)
+
+        if isinstance(result, tuple):
+            return result
+        
+        return result, 201
 
 @api.route('/<amenity_id>')
 class AmenityResource(Resource):
@@ -63,3 +90,28 @@ class AmenityResource(Resource):
         if not amenity:
             return {'error': 'Amenity not found'}, 404
         return amenity.to_dict(), 200
+
+class AdminAmenityModify(Resource):
+    @jwt_required()
+    def put(self, amenity_id):
+        """Modify an amenity (Admins Only)."""
+        if not is_admin():
+            return {"error": "Admin privileges required"}, 403
+
+        update_data = request.get_json()
+        result = facade.update_amenity(amenity_id, update_data)
+
+        return result, 200
+
+@api.route('/place/<place_id>/amenities')
+class PlaceAmenities(Resource):
+    def get(self, place_id):
+        try:
+            # Usar get_amenities_by_place del repositorio
+            amenities = facade.get_amenities_by_place(place_id)
+            return {
+                "status": "success",
+                "data": [amenity.to_dict() for amenity in amenities]
+            }, 200
+        except Exception as e:
+            return {"error": str(e)}, 500
