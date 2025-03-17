@@ -22,7 +22,8 @@ class Login(Resource):
 
             # 🔹 Validar que ambos campos existan en la petición
             if not credentials or "email" not in credentials or "password" not in credentials:
-                raise ValueError("Both 'email' and 'password' fields are required.")
+                raise ValueError(
+                    "Both 'email' and 'password' fields are required.")
 
             # 🔹 Recuperar el usuario
             user = facade.get_user_by_email(credentials['email'])
@@ -31,7 +32,7 @@ class Login(Resource):
             if not user or not user.verify_password(credentials['password']):
                 raise Unauthorized({
                     "message": {"The provided email or password is incorrect."
-                    }
+                                }
                 })
 
             # 🔹 Crear el token si todo es válido
