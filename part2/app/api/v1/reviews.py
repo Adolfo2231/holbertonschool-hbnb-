@@ -76,7 +76,8 @@ class ReviewList(Resource):
             return {"error": "You cannot review your own place"}, 400
 
         # Check for duplicate reviews
-        existing_review = facade.get_review_by_user_and_place(current_user_id, place.id)
+        existing_review = facade.get_review_by_user_and_place(
+            current_user_id, place.id)
         if existing_review:
             return {"error": "You have already reviewed this place"}, 400
 
@@ -120,13 +121,13 @@ class ReviewResource(Resource):
         try:
             current_user_id = get_jwt_identity()
             review = facade.get_review(review_id)
-            
+
             if not review:
                 raise NotFound("Review not found")
-                
+
             if review.user_id != current_user_id:
                 raise Forbidden("Users can only modify their own reviews")
-                
+
             update_data = request.get_json()
             result = facade.update_review(review_id, update_data)
             return {"status": "success", "data": result}, 200
@@ -150,40 +151,11 @@ class ReviewResource(Resource):
 
 
 @api.route('/places/<place_id>/reviews')
-class PlaceReviewList(Resource):
-    """
-    Resource for listing reviews for a specific place.
-
-    Methods:
-        get: Retrieve all reviews for a specific place.
-    """
-
-    @api.response(200, 'List of reviews for the place retrieved successfully')
-    @api.response(404, 'Place not found')
-    def get(self, place_id):
-        """Get all reviews for a specific place."""
-        reviews = [r.to_dict()
-                   for r in facade.get_all_reviews() if r.place_id == place_id]
-        if not reviews:
-            return {'error': 'Place not found'}, 404
-        return reviews, 200
-
-
-@api.route('/place/<place_id>/reviews')
 class PlaceReviews(Resource):
     def get(self, place_id):
+        """Get all reviews for a specific place"""
         try:
-            # Usar get_reviews_by_place del repositorio
             reviews = facade.get_reviews_by_place(place_id)
-            # Usar get_average_rating del repositorio
-            average = facade.get_average_rating(place_id)
-            
-            return {
-                "status": "success",
-                "data": {
-                    "reviews": [review.to_dict() for review in reviews],
-                    "average_rating": average
-                }
-            }, 200
+            return [review.to_dict() for review in reviews], 200
         except Exception as e:
             return {"error": str(e)}, 500
