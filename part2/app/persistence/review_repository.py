@@ -19,4 +19,20 @@ class ReviewRepository(SQLAlchemyRepository):
         """Get average rating for a place."""
         result = db.session.query(db.func.avg(self.model.rating))\
             .filter_by(place_id=place_id).scalar()
-        return float(result) if result else 0.0 
+        return float(result) if result else 0.0
+
+    def get_by_user_and_place(self, user_id: str, place_id: str) -> Review:
+        """
+        Get a review by user and place IDs.
+        
+        Args:
+            user_id: The ID of the user
+            place_id: The ID of the place
+            
+        Returns:
+            Review object if found, None otherwise
+        """
+        return self.model.query.filter_by(
+            user_id=user_id,
+            place_id=place_id
+        ).first() 

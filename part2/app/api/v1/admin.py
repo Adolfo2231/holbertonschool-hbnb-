@@ -41,6 +41,22 @@ def is_admin() -> dict:
 # USERS CRUD
 @api.route('/users/<string:user_id>')
 class AdminUserModify(Resource):
+    @api.response(200, "User found")
+    @api.response(403, "Permiso denegado")
+    @api.response(404, "Usuario no encontrado") 
+    @jwt_required()
+    def get(self, user_id: str) -> dict:
+        """Obtener un usuario por ID (Solo admin)."""
+        try:
+            is_admin()
+            user = facade.get_user(user_id)
+            if not user:
+                raise NotFound("Usuario no encontrado")
+            return {"status": "success", "data": user.to_dict()}, 200
+        except NotFound:
+            raise NotFound("Usuario no encontrado")
+        except Exception as e:
+            raise InternalServerError(str(e))
     @api.response(200, "User successfully updated")
     @api.response(403, "Permission denied")
     @api.response(404, "User not found")
@@ -66,11 +82,19 @@ class AdminUserModify(Resource):
     def delete(self, user_id: str) -> dict:
         """Delete any user (Admin only)."""
         try:
-            is_admin()
-            facade.delete_user(user_id, admin_override=True)
-            return {"status": "success", "message": "User deleted"}, 200
-        except NotFound:
-            raise NotFound("User not found")
+            current_user_id = get_jwt_identity()
+            result = facade.delete_user(user_id, current_user_id)
+            
+            if result:
+                return {
+                    "status": "success", 
+                    "message": "User deleted successfully"
+                }, 200
+                
+        except PermissionError as e:
+            raise Forbidden(str(e))
+        except ValueError as e:
+            raise BadRequest(str(e))
         except Exception as e:
             raise InternalServerError(str(e))
 

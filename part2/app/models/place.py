@@ -35,7 +35,7 @@ from typing import Dict, Any
 # Association table for Many-to-Many relationship between Place and Amenity
 place_amenity = db.Table('place_amenity',
     db.Column('place_id', db.String(36), db.ForeignKey('places.id'), primary_key=True),
-    db.Column('amenity_id', db.String(36), db.ForeignKey('amenities.id'), primary_key=True, extend_existing=True)
+    db.Column('amenity_id', db.String(36), db.ForeignKey('amenities.id'), primary_key=True)
 )
 
 class Place(BaseModel):
@@ -53,23 +53,12 @@ class Place(BaseModel):
     reviews = relationship('Review', backref='place', lazy=True)
     amenities = relationship('Amenity', secondary=place_amenity, back_populates='places', lazy=True)
 
-    def __init__(
-        self, title: str, description: str, price: float, latitude: float,
-        longitude: float, owner_id: str, **kwargs: Any
-    ):
-        """
-        Initialize a Place instance with validation.
-        """
+    def __init__(self, **kwargs):
+        """Initialize a Place instance."""
         super().__init__(**kwargs)
-        self.title = self.validate_title(title)
-        self.description = self.validate_description(description)
-        self.price = self.validate_price(price)
-        self.latitude = self.validate_latitude(latitude)
-        self.longitude = self.validate_longitude(longitude)
-        self.owner_id = self.validate_owner(owner_id)
 
     @validates('title')
-    def validate_title(self, key: str, title: str) -> str:
+    def validate_title(self, key, title):
         """Validate the title of the place."""
         if not isinstance(title, str) or not title.strip():
             raise ValueError("Title must be a non-empty string")
@@ -125,5 +114,6 @@ class Place(BaseModel):
             "longitude": self.longitude,
             "owner_id": self.owner_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "amenities": [amenity.to_dict() for amenity in self.amenities]
         }

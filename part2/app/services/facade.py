@@ -10,6 +10,7 @@ from app.persistence.amenity_repository import AmenityRepository
 from app.persistence.review_repository import ReviewRepository
 from flask_sqlalchemy import SQLAlchemy
 from app.extensions import db
+from werkzeug.exceptions import NotFound, BadRequest, Forbidden
 
 # --------------------------------------------
 # HBnBFacade Class - Business Logic Layer
@@ -70,22 +71,30 @@ class HBnBFacade:
         """Retrieve all users."""
         return self.user_repo.get_all()
     
-    def delete_user(self, user_id, current_user_id):
+    def delete_user(self, user_id: str, current_user_id: str) -> bool:
         """Delete a user by ID."""
-        # Toda la lógica de validación aquí
+        # Obtener el usuario actual y el usuario a eliminar
         current_user = self.get_user(current_user_id)
-        if not current_user or not current_user.is_admin:
-            raise PermissionError("Admin access required")
+        user_to_delete = self.get_user(user_id)
 
-        user = self.get_user(user_id)
-        if not user:
+        if not user_to_delete:
             raise ValueError("User not found")
-            
-        if user.is_admin and self.count_admins() <= 1:
+
+        # Permitir que los usuarios se borren a sí mismos O que un admin borre a cualquiera
+        if current_user_id != user_id and (not current_user or not current_user.is_admin):
+            raise PermissionError("Users can only delete their own account or must be admin")
+
+        # Prevenir borrar el último admin
+        if user_to_delete.is_admin and self.count_admins() <= 1:
             raise ValueError("Cannot delete the last admin user")
 
-        self.user_repo.delete(user)
-        return True
+        try:
+            db.session.delete(user_to_delete)
+            db.session.commit()
+            return True
+        except Exception as e:
+            db.session.rollback()
+            raise Exception(f"Error deleting user: {str(e)}")
 
     # --------------------------------------------
     # AMENITY MANAGEMENT
@@ -154,9 +163,23 @@ class HBnBFacade:
     def update_place(self, place_id, place_data):
         """Update an existing place."""
         place = self.get_place(place_id)  # Now raises error if not found
+        
+        # Manejar amenities separadamente
+        if 'amenities' in place_data:
+            amenity_ids = place_data.pop('amenities')  # Remover amenities del dict
+            amenities = []
+            for amenity_id in amenity_ids:
+                amenity = self.get_amenity(amenity_id)
+                if amenity:
+                    amenities.append(amenity)
+            place.amenities = amenities
+
+        # Actualizar otros campos
         for key, value in place_data.items():
             setattr(place, key, value)
-        return place
+        
+        db.session.commit()
+        return place.to_dict()
 
     # --------------------------------------------
     # REVIEW MANAGEMENT
@@ -194,10 +217,17 @@ class HBnBFacade:
         review = self.get_review(review_id)  # Now raises error if not found
         for key, value in review_data.items():
             setattr(review, key, value)
-        return review
+        db.session.commit()  # Asegurarnos de guardar los cambios
+        return review.to_dict()  # Retornar el diccionario en lugar del objeto
 
     def delete_review(self, review_id):
         """Delete an existing review."""
         review = self.get_review(review_id)  # Now raises error if not found
         self.review_repo.delete(review)
         return True
+
+    def get_review_by_user_and_place(self, user_id: str, place_id: str) -> Review:
+        """
+        Get a review by user and place IDs using the review repository.
+        """
+        return self.review_repo.get_by_user_and_place(user_id, place_id)

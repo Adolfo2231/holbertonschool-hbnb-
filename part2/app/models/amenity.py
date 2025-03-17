@@ -34,19 +34,17 @@ class Amenity(BaseModel):
     places = relationship('Place', secondary=place_amenity, back_populates='amenities', lazy=True)
 
     def __init__(self, name: str, **kwargs: Any):
-        """
-        Initialize an Amenity instance with validation.
-        """
+        """Initialize an Amenity instance."""
         super().__init__(**kwargs)
-        self.name = self.validate_name(name)
+        self.name = name  # SQLAlchemy manejará la validación
 
     @validates('name')
-    def validate_name(self, key: str, name: str) -> str:
+    def validate_name(self, key, name):  # Necesita dos parámetros: key y name
         """Validate the amenity name."""
         if not isinstance(name, str) or not name.strip():
-            raise ValueError("Amenity name must be a non-empty string")
+            raise ValueError("Name must be a non-empty string")
         if len(name) > 100:
-            raise ValueError("Amenity name must be 100 characters or less")
+            raise ValueError("Name must be 100 characters or less")
         return name.strip()
 
     def to_dict(self) -> Dict[str, Any]:

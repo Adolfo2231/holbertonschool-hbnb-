@@ -44,10 +44,10 @@ class Review(BaseModel):
         Initialize a Review instance with validation.
         """
         super().__init__(**kwargs)
-        self.text = self.validate_text(text)
-        self.rating = self.validate_rating(rating)
-        self.user_id = self.validate_user_id(user_id)
-        self.place_id = self.validate_place_id(place_id)
+        self.text = text
+        self.rating = rating
+        self.user_id = user_id
+        self.place_id = place_id
 
     @validates('text')
     def validate_text(self, key: str, text: str) -> str:

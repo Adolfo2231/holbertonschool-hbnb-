@@ -4,5 +4,5 @@ flask-bcrypt
 flask-jwt-extended
 sqlalchemy
 flask-sqlalchemy
-werkzeug.exceptions
+werkzeug
 flask-migrate

@@ -35,6 +35,12 @@ def create_app(config_class="config.DevelopmentConfig"):
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+    # Inicializar todas las extensiones
+    db.init_app(app)
+    migrate.init_app(app, db)
+    bcrypt.init_app(app)
+    jwt.init_app(app)
+
     # Create API instance with Swagger documentation
     api = Api(app, version="1.0", title="HBnB API",
              description="HBnB Application API")
@@ -47,14 +53,15 @@ def create_app(config_class="config.DevelopmentConfig"):
     api.add_namespace(auth_ns, path="/api/v1/auth")
     api.add_namespace(admin_ns, path='/api/v1/admin')
     
-    # Inicializar todas las extensiones
-    db.init_app(app)
-    migrate.init_app(app, db)
-    bcrypt.init_app(app)
-    jwt.init_app(app)
-    
-    # creamos el admin por defecto
+    # Crear tablas y admin por defecto
     with app.app_context():
-        create_default_admin()
+        # Primero crear todas las tablas
+        db.create_all()
+        
+        try:
+            # Luego intentar crear el admin
+            create_default_admin()
+        except Exception as e:
+            print(f"Error creating admin: {e}")
     
     return app
