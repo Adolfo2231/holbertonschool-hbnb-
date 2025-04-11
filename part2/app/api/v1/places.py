@@ -66,8 +66,9 @@ class PlaceList(Resource):
 
             if missing_fields:
                 return {
-                    "status": "error", "message": f"Missing required fields: {
-                        ', '.join(missing_fields)}"}, 400
+                    "status": "error",
+                    "message": f"Missing required fields: {', '.join(missing_fields)}"
+                }, 400
 
             result = facade.create_place(data)
 
@@ -147,6 +148,7 @@ class PlaceResource(Resource):
 
 @api.route('/<place_id>/reviews')
 class PlaceReviews(Resource):
+    @api.doc('get_place_reviews')
     def get(self, place_id):
         """Get all reviews for a specific place"""
         try:
@@ -164,4 +166,7 @@ class PlaceReviews(Resource):
                 }
             }, 200
         except Exception as e:
-            return {"error": str(e)}, 500
+            return {
+                "status": "error",
+                "message": str(e)
+            }, 500
