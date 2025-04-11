@@ -186,14 +186,48 @@ class HBnBFacade:
     # --------------------------------------------
 
     def create_review(self, review_data):
-        """Create a new review."""
+        """Create a new review.
+        
+        Args:
+            review_data: Can be either a Review object or a dictionary with review data
+        """
         try:
-            review = Review(**review_data)
-            self.review_repo.add(review)
+            # Si es un objeto Review, convertirlo a diccionario
+            if hasattr(review_data, 'to_dict'):
+                review_data = review_data.to_dict()
+            
+            # Validar datos requeridos
+            required_fields = ['user_id', 'place_id', 'text', 'rating']
+            if not all(field in review_data for field in required_fields):
+                raise ValueError("Missing required fields for review")
+
+            # Verificar que el usuario existe
+            user = self.get_user(review_data['user_id'])
+            if not user:
+                raise ValueError("User not found")
+
+            # Verificar que el lugar existe
+            place = self.get_place(review_data['place_id'])
+            if not place:
+                raise ValueError("Place not found")
+
+            # Crear el review
+            review = Review(
+                user_id=review_data['user_id'],
+                place_id=review_data['place_id'],
+                text=review_data['text'],
+                rating=review_data['rating']
+            )
+
+            db.session.add(review)
+            db.session.commit()
             return review
+
         except ValueError as e:
+            db.session.rollback()
             raise ValueError(f"Validation error: {str(e)}")
         except Exception as e:
+            db.session.rollback()
             raise Exception(f"Internal server error: {str(e)}")
 
     def get_review(self, review_id):
