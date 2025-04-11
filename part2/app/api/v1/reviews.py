@@ -13,8 +13,11 @@ import uuid
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models.review import Review
 from werkzeug.exceptions import BadRequest, NotFound, Forbidden, InternalServerError
+from flask import request
 
-api = Namespace('reviews', description='Review operations')
+api = Namespace('reviews', 
+               description='Review operations',
+               path='/api/v1')  # Set base path for all routes
 
 # Define models for input validation and documentation
 user_model = api.model('User', {
@@ -38,15 +41,11 @@ place_model = api.model('Place', {
     'title': fields.String(required=True, description='Title of the place'),
     'description': fields.String(description='Description of the place'),
     'price': fields.Float(required=True, description='Price per night'),
-    'latitude': fields.Float(required=True,
-                             description='Latitude of the place'),
-    'longitude': fields.Float(required=True,
-                              description='Longitude of the place'),
+    'latitude': fields.Float(required=True, description='Latitude of the place'),
+    'longitude': fields.Float(required=True, description='Longitude of the place'),
     'owner': fields.Nested(user_model, description='Owner of the place'),
-    'amenities': fields.List(fields.Nested(amenity_model),
-                             description='List of amenities'),
-    'reviews': fields.List(fields.Nested(review_model),
-                           description='List of reviews')
+    'amenities': fields.List(fields.Nested(amenity_model), description='List of amenities'),
+    'reviews': fields.List(fields.Nested(review_model), description='List of reviews')
 })
 
 
@@ -152,6 +151,7 @@ class ReviewResource(Resource):
 
 @api.route('/places/<place_id>/reviews')
 class PlaceReviews(Resource):
+    @api.doc('get_place_reviews')
     def get(self, place_id):
         """Get all reviews for a specific place"""
         try:
@@ -159,3 +159,57 @@ class PlaceReviews(Resource):
             return [review.to_dict() for review in reviews], 200
         except Exception as e:
             return {"error": str(e)}, 500
+
+    @api.doc('create_place_review')
+    @api.expect(review_model)
+    @jwt_required()
+    def post(self, place_id):
+        """Create a new review for a place"""
+        try:
+            user_id = get_jwt_identity()
+            place = facade.get_place(place_id)
+            
+            if not place:
+                return {"error": "Place not found"}, 404
+
+            # Prevent users from reviewing their own place
+            if place.owner_id == user_id:
+                return {"error": "You cannot review your own place"}, 400
+
+            # Check for duplicate reviews
+            existing_review = facade.get_review_by_user_and_place(user_id, place.id)
+            if existing_review:
+                return {"error": "You have already reviewed this place"}, 400
+
+            data = request.get_json()
+            if not data:
+                return {"error": "Invalid JSON"}, 400
+
+            rating = data.get('rating')
+            text = data.get('text')
+
+            if rating is None or text is None:
+                return {"error": "Missing rating or text"}, 400
+
+            try:
+                rating = int(rating)
+                if not (1 <= rating <= 5):
+                    return {"error": "Rating must be between 1 and 5"}, 400
+            except ValueError:
+                return {"error": "Rating must be a number"}, 400
+
+            review_data = {
+                'user_id': user_id,
+                'place_id': place.id,
+                'text': text,
+                'rating': rating
+            }
+
+            saved_review = facade.create_review(review_data)
+            return saved_review.to_dict(), 201
+
+        except Exception as e:
+            return {"error": str(e)}, 500
+
+            
+
