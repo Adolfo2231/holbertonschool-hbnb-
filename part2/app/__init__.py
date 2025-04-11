@@ -10,10 +10,7 @@ from app.api.v1.amenities import api as amenities_ns
 from app.api.v1.auth import api as auth_ns
 from .api.v1.admin import api as admin_ns
 from .init_db import create_default_admin
-
-# Importar los modelos
-from app.models.user import User
-from app.models.place import Place
+from flask_cors import CORS
 
 def create_app(config_class="config.DevelopmentConfig"):
     """
@@ -27,6 +24,7 @@ def create_app(config_class="config.DevelopmentConfig"):
         Flask: Configured Flask application instance.
     """
     app = Flask(__name__)
+    CORS(app, supports_credentials=True)
     app.config.from_object(config_class)
 
     # Definir ruta absoluta para la base de datos
@@ -48,7 +46,7 @@ def create_app(config_class="config.DevelopmentConfig"):
     # Register all namespaces
     api.add_namespace(users_ns, path="/api/v1/users")
     api.add_namespace(places_ns, path="/api/v1/places")
-    api.add_namespace(reviews_ns, path="/api/v1/reviews")
+    api.add_namespace(reviews_ns)  # Remove path to allow both root and nested routes
     api.add_namespace(amenities_ns, path="/api/v1/amenities")
     api.add_namespace(auth_ns, path="/api/v1/auth")
     api.add_namespace(admin_ns, path='/api/v1/admin')
