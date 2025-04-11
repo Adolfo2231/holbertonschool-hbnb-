@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HBNB - Places</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="icon" type="image/x-icon" href="img/icon.png">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="index.html" class="logo-text">
+                <img src="img/logo_hbnb.png" alt="HBNB Logo" class="logo-image">
+            </a>
+            <div class="nav-links">
+                <div id="auth-button">
+                    <a href="login.html" class="login-button">Login</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <div class="container">
+            <div class="actions-container">
+                <div class="filter-container">
+                    <label for="max-price">Max Price:</label>
+                    <select id="max-price">
+                        <option value="all">All</option>
+                        <option value="100">$100</option>
+                        <option value="200">$200</option>
+                        <option value="300">$300</option>
+                        <option value="400">$400</option>
+                        <option value="500">$500</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="places-container" class="places-container">
+                <!-- Places will be loaded dynamically -->
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 HBNB. All rights reserved.</p>
+    </footer>
+
+    <script src="js/auth.js"></script>
+    <script src="js/index.js"></script>
+</body>
+</html>
